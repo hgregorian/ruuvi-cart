@@ -18,6 +18,7 @@ PACKAGE_DIR           := $(FIRMWARE)/src/targets/ruuvitag_b/armgcc
 PACKAGE_NAME          ?= ruuvifw_cart
 
 OFFICIAL_VERSION      := v3.31.1
+OFFICIAL_REPO         := https://github.com/ruuvi/ruuvi.firmware.c.git
 OFFICIAL_VERSION_NUM  := $(patsubst v%,%,$(OFFICIAL_VERSION))
 OFFICIAL_DIR          := $(ROOT)/official-$(OFFICIAL_VERSION_NUM)
 OFFICIAL_HEX_NAME     := ruuvitag_b_armgcc_ruuvifw_default_$(OFFICIAL_VERSION)_app.hex
@@ -217,8 +218,9 @@ package: check-host sdk
 stock: check-host sdk official
 	@set -euo pipefail; \
 	if ! git -C "$(FIRMWARE)" rev-parse -q --verify "refs/tags/$(OFFICIAL_VERSION)^{commit}" >/dev/null; then \
-		echo "Fetching firmware tag $(OFFICIAL_VERSION)..."; \
-		git -C "$(FIRMWARE)" fetch origin "refs/tags/$(OFFICIAL_VERSION):refs/tags/$(OFFICIAL_VERSION)"; \
+		echo "Fetching official Ruuvi tag $(OFFICIAL_VERSION)..."; \
+		git -C "$(FIRMWARE)" fetch "$(OFFICIAL_REPO)" \
+			"refs/tags/$(OFFICIAL_VERSION):refs/tags/$(OFFICIAL_VERSION)"; \
 	fi; \
 	if [ -e "$(STOCK_WORKTREE)" ]; then \
 		git -C "$(FIRMWARE)" worktree remove --force "$(STOCK_WORKTREE)" >/dev/null 2>&1 || true; \
