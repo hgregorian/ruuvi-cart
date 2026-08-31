@@ -7,7 +7,6 @@ FIRMWARE              := $(ROOT)/firmware
 
 SDK_VERSION           := 15.3.0_59ac345
 SDK_DIRNAME           := nRF5_SDK_$(SDK_VERSION)
-SDK_ARCHIVE           := $(ROOT)/nRF5SDK$(shell printf '%s' '$(SDK_VERSION)' | tr -d '._').zip
 SDK                   := $(ROOT)/$(SDK_DIRNAME)
 SDK_URL               ?= https://developer.nordicsemi.com/nRF5_SDK/nRF5_SDK_v15.x.x/$(SDK_DIRNAME).zip
 SDK_TOOLCHAIN_FILE    := $(SDK)/components/toolchain/gcc/Makefile.posix
@@ -26,11 +25,12 @@ HOST_ARCH             := $(shell uname -m)
 FW_VERSION := $(shell cd "$(FIRMWARE)" 2>/dev/null && \
 	(git describe --tags --exact-match 2>/dev/null || git rev-parse --short HEAD 2>/dev/null))
 
-.PHONY: help check-host sdk image tools clean build verify package stock all
+.PHONY: help check-host update sdk image tools clean build verify package stock all
 
 
 help:
 	@echo "Targets:"
+	@echo "  make update     Pull repository and synchronize all submodules"
 	@echo "  make sdk        Download/configure Nordic nRF5 SDK $(SDK_VERSION)"
 	@echo "  make image      Build the Docker toolchain image"
 	@echo "  make tools      Display toolchain versions"
@@ -55,6 +55,19 @@ check-host:
 		exit 1; \
 	fi
 
+update: check-host
+	@echo "Updating ruuvi-cart..."
+	git pull --ff-only
+	@echo
+	@echo "Synchronizing submodule URLs..."
+	git submodule sync --recursive
+	@echo
+	@echo "Updating submodules to revisions recorded by the repository..."
+	git submodule update --init --recursive
+	@echo
+	@$(MAKE) sdk
+	@echo
+	@echo "Update complete."
 
 # Download the exact Nordic SDK required by Ruuvi firmware v3.31.1 and
 # configure its GCC toolchain path for the compiler installed in our image.
@@ -69,7 +82,7 @@ sdk: check-host
 			rm -rf "$(SDK)"; \
 		fi; \
 		echo "Downloading Nordic nRF5 SDK $(SDK_VERSION)..."; \
-		tmp=$$(mktemp /tmp/nRF5SDK153059ac345.XXXXXX.zip); \
+		tmp=$$(mktemp /tmp/nRF5SDK.XXXXXX.zip); \
 		trap 'rm -f "$$tmp"' EXIT; \
 		curl -fL --retry 3 --retry-delay 2 "$(SDK_URL)" -o "$$tmp"; \
 		unzip -q "$$tmp" -d "$(ROOT)"; \
@@ -118,7 +131,7 @@ build: check-host sdk
 	@echo "Building firmware version $(FW_VERSION)"
 	docker run --rm \
 		-v "$(FIRMWARE):/src" \
-		-v "$(SDK):/src/nRF5_SDK_15.3.0_59ac345" \
+		-v "$(SDK):/src/$(SDK_DIRNAME)" \
 		-w $(TARGET) \
 		$(IMAGE) \
 		make \
@@ -159,14 +172,13 @@ package: check-host sdk
 	}
 	docker run --rm \
 		-v "$(FIRMWARE):/src" \
-		-v "$(SDK):/src/nRF5_SDK_15.3.0_59ac345" \
+		-v "$(SDK):/src/$(SDK_DIRNAME)" \
 		-w $(TARGET) \
 		$(IMAGE) \
 		./package.sh -n $(PACKAGE_NAME) -v $(FW_VERSION)
 	@echo
 	@echo "Packages:"
 	@ls -lh "$(PACKAGE_DIR)"/*$(PACKAGE_NAME)*.zip
-
 
 stock: clean build verify
 
