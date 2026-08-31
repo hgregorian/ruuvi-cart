@@ -1,0 +1,15 @@
+# Nordic SDK - downloaded dependency
+nRF5_SDK_15.3.0_59ac345/
+
+# Reference release artifacts / local comparison files
+official-v3.31.1/
+
+# macOS
+.DS_Store
+
+# Misc temporary files
+*.tmp
+*.swp
+
+# Nordic SDK archive
+nRF5SDK*.zip
