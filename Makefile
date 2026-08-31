@@ -2,6 +2,7 @@ SHELL := /bin/bash
 
 IMAGE        := ruuvi-fw-build:1
 PLATFORM     := linux/amd64
+BUILD_VOLUME ?= ruuvi-fw-output
 
 ROOT         := $(CURDIR)
 FIRMWARE     := $(ROOT)/firmware
@@ -27,13 +28,14 @@ help:
 	@echo "Targets:"
 	@echo "  make image      Build the Docker toolchain image"
 	@echo "  make tools      Display toolchain versions"
-	@echo "  make clean      Remove firmware build output"
-	@echo "  make build      Build default RuuviTag firmware"
+	@echo "  make clean      Remove host build output and Docker build volume"
+	@echo "  make build      Build firmware using a Docker-managed build volume"
 	@echo "  make verify     Compare build with official v3.31.1"
 	@echo "  make package    Build DFU packages"
 	@echo "  make stock      Clean, build and verify stock firmware"
 	@echo
 	@echo "Current firmware version: $(FW_VERSION)"
+	@echo "Build volume: $(BUILD_VOLUME)"
 
 
 image:
@@ -56,27 +58,38 @@ tools:
 			mergehex --version'
 
 
+# GCC produces hundreds of small .o/.d/.su files. On Docker Desktop for macOS,
+# writing those directly to a bind mount can intermittently fail with EDEADLK
+# ("Resource deadlock avoided"). Keep _build on Docker's native Linux storage
+# and copy the completed build tree back to the host after a successful build.
 clean:
-	docker run --rm \
-		--platform $(PLATFORM) \
-		-v "$(FIRMWARE):/src" \
-		-v "$(SDK):/src/nRF5_SDK_15.3.0_59ac345" \
-		-w $(TARGET) \
-		$(IMAGE) \
-		make clean
+	rm -rf "$(BUILD_DIR)"
+	@docker volume rm "$(BUILD_VOLUME)" >/dev/null 2>&1 || true
 
 
 build:
 	@echo "Building firmware version $(FW_VERSION)"
+	@docker volume inspect "$(BUILD_VOLUME)" >/dev/null 2>&1 || \
+		docker volume create "$(BUILD_VOLUME)" >/dev/null
 	docker run --rm \
 		--platform $(PLATFORM) \
 		-v "$(FIRMWARE):/src" \
 		-v "$(SDK):/src/nRF5_SDK_15.3.0_59ac345" \
+		-v "$(BUILD_VOLUME):$(TARGET)/_build" \
 		-w $(TARGET) \
 		$(IMAGE) \
 		make \
 			DEBUG=-DNDEBUG \
 			'FW_VERSION=-DAPP_FW_VERSION=\"$(FW_VERSION)\"'
+	@echo "Copying build output to $(BUILD_DIR)"
+	rm -rf "$(BUILD_DIR)"
+	mkdir -p "$(BUILD_DIR)"
+	docker run --rm \
+		--platform $(PLATFORM) \
+		-v "$(BUILD_VOLUME):/build:ro" \
+		-v "$(BUILD_DIR):/out" \
+		$(IMAGE) \
+		sh -c 'cp -a /build/. /out/'
 
 
 verify:
@@ -102,17 +115,18 @@ verify:
 
 
 package:
-	@test -f "$(BUILD_DIR)/nrf52832_xxaa.hex" || { \
-		echo "ERROR: Build output not found. Run 'make build' first."; \
+	@docker volume inspect $(BUILD_VOLUME) >/dev/null 2>&1 || { \
+		echo "ERROR: Docker build volume '$(BUILD_VOLUME)' not found. Run 'make build' first."; \
 		exit 1; \
 	}
 	docker run --rm \
 		--platform $(PLATFORM) \
 		-v "$(FIRMWARE):/src" \
 		-v "$(SDK):/src/nRF5_SDK_15.3.0_59ac345" \
+		-v $(BUILD_VOLUME):$(TARGET)/_build \
 		-w $(TARGET) \
 		$(IMAGE) \
-		./package.sh -n $(PACKAGE_NAME)
+		./package.sh -n $(PACKAGE_NAME) -v $(FW_VERSION)
 	@echo
 	@echo "Packages:"
 	@ls -lh "$(PACKAGE_DIR)"/*$(PACKAGE_NAME)*.zip
