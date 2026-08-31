@@ -1,30 +1,30 @@
 SHELL := /bin/bash
 
-IMAGE        := ruuvi-fw-build:1
+IMAGE                 := ruuvi-fw-build:1
 
-ROOT         := $(CURDIR)
-FIRMWARE     := $(ROOT)/firmware
+ROOT                  := $(CURDIR)
+FIRMWARE              := $(ROOT)/firmware
 
-SDK_VERSION  := 15.3.0_59ac345
-SDK_DIRNAME  := nRF5_SDK_$(SDK_VERSION)
-SDK          := $(ROOT)/$(SDK_DIRNAME)
-SDK_URL      ?= https://developer.nordicsemi.com/nRF5_SDK/nRF5_SDK_v15.x.x/nRF5_SDK_15.3.0_59ac345.zip
-SDK_TOOLCHAIN_FILE := $(SDK)/components/toolchain/gcc/Makefile.posix
+SDK_VERSION           := 15.3.0_59ac345
+SDK_DIRNAME           := nRF5_SDK_$(SDK_VERSION)
+SDK_ARCHIVE           := $(ROOT)/nRF5SDK$(shell printf '%s' '$(SDK_VERSION)' | tr -d '._').zip
+SDK                   := $(ROOT)/$(SDK_DIRNAME)
+SDK_URL               ?= https://developer.nordicsemi.com/nRF5_SDK/nRF5_SDK_v15.x.x/$(SDK_DIRNAME).zip
+SDK_TOOLCHAIN_FILE    := $(SDK)/components/toolchain/gcc/Makefile.posix
 
-TARGET       := /src/src/targets/ruuvitag_b/armgcc
-BUILD_DIR    := $(FIRMWARE)/src/targets/ruuvitag_b/armgcc/_build
-PACKAGE_DIR  := $(FIRMWARE)/src/targets/ruuvitag_b/armgcc
+TARGET                := /src/src/targets/ruuvitag_b/armgcc
+BUILD_DIR             := $(FIRMWARE)/src/targets/ruuvitag_b/armgcc/_build
+PACKAGE_DIR           := $(FIRMWARE)/src/targets/ruuvitag_b/armgcc
 
-OFFICIAL_BIN := $(ROOT)/official-v3.31.1/official.bin
-PACKAGE_NAME ?= ruuvifw_cart
+OFFICIAL_BIN          := $(ROOT)/official-v3.31.1/official.bin
+PACKAGE_NAME          ?= ruuvifw_cart
 
-HOST_ARCH := $(shell uname -m)
+HOST_ARCH             := $(shell uname -m)
 
 # At an exact tag this becomes, for example, v3.31.1.
 # After custom commits it falls back to the Git short SHA.
 FW_VERSION := $(shell cd "$(FIRMWARE)" 2>/dev/null && \
 	(git describe --tags --exact-match 2>/dev/null || git rev-parse --short HEAD 2>/dev/null))
-
 
 .PHONY: help check-host sdk image tools clean build verify package stock all
 
@@ -61,9 +61,13 @@ check-host:
 # The target is idempotent: an existing SDK is kept and the toolchain file is
 # normalized on every run.
 sdk: check-host
-	@if [ ! -d "$(SDK)" ]; then \
+	@if [ ! -f "$(SDK_TOOLCHAIN_FILE)" ]; then \
 		command -v curl >/dev/null 2>&1 || { echo "ERROR: curl is required."; exit 1; }; \
 		command -v unzip >/dev/null 2>&1 || { echo "ERROR: unzip is required."; exit 1; }; \
+		if [ -e "$(SDK)" ]; then \
+			echo "Removing incomplete SDK: $(SDK)"; \
+			rm -rf "$(SDK)"; \
+		fi; \
 		echo "Downloading Nordic nRF5 SDK $(SDK_VERSION)..."; \
 		tmp=$$(mktemp /tmp/nRF5SDK153059ac345.XXXXXX.zip); \
 		trap 'rm -f "$$tmp"' EXIT; \
