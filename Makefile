@@ -128,7 +128,7 @@ firmware-use:
 	@git -C "$(FIRMWARE)" clean -fdx
 	@echo
 	@echo "Fetching firmware refs..."
-	@git -C "$(FIRMWARE)" fetch --all --tags --prune
+	@git -C "$(FIRMWARE)" -c fetch.recurseSubmodules=false fetch --all --tags --prune
 	@echo
 	@echo "Selecting firmware ref: $(REF)"
 	@set -euo pipefail; \
