@@ -169,12 +169,22 @@ firmware-use:
 	@echo
 	@echo "Selecting firmware ref: $(REF)"
 	@set -euo pipefail; \
-	if git -C "$(FIRMWARE)" show-ref --verify --quiet "refs/heads/$(REF)"; then \
-		git -C "$(FIRMWARE)" switch --force "$(REF)"; \
-	elif git -C "$(FIRMWARE)" show-ref --verify --quiet "refs/remotes/origin/$(REF)"; then \
-		git -C "$(FIRMWARE)" switch --force --track -c "$(REF)" "origin/$(REF)"; \
+	if git -C "$(FIRMWARE)" show-ref --verify --quiet "refs/remotes/origin/$(REF)"; then \
+		if git -C "$(FIRMWARE)" show-ref --verify --quiet "refs/heads/$(REF)"; then \
+			git -C "$(FIRMWARE)" switch --force "$(REF)"; \
+			git -C "$(FIRMWARE)" reset --hard "origin/$(REF)"; \
+		else \
+			git -C "$(FIRMWARE)" switch --force --track -c "$(REF)" "origin/$(REF)"; \
+		fi; \
 	elif git -C "$(FIRMWARE)" show-ref --verify --quiet "refs/remotes/upstream/$(REF)"; then \
-		git -C "$(FIRMWARE)" switch --force --track -c "$(REF)" "upstream/$(REF)"; \
+		if git -C "$(FIRMWARE)" show-ref --verify --quiet "refs/heads/$(REF)"; then \
+			git -C "$(FIRMWARE)" switch --force "$(REF)"; \
+			git -C "$(FIRMWARE)" reset --hard "upstream/$(REF)"; \
+		else \
+			git -C "$(FIRMWARE)" switch --force --track -c "$(REF)" "upstream/$(REF)"; \
+		fi; \
+	elif git -C "$(FIRMWARE)" show-ref --verify --quiet "refs/heads/$(REF)"; then \
+		git -C "$(FIRMWARE)" switch --force "$(REF)"; \
 	else \
 		git -C "$(FIRMWARE)" checkout --force --detach "$(REF)"; \
 	fi
