@@ -19,6 +19,14 @@ PACKAGE_DIR           := $(FIRMWARE)/src/targets/ruuvitag_b/armgcc
 
 PACKAGE_NAME          ?= ruuvifw_cart
 
+# Optional firmware identity file at firmware/VERSION.
+# Supported keys:
+#   FW_NAME=DumpSense FW
+#   FW_VERSION=v0.1.0
+# If either key is missing, or VERSION does not exist, the build falls back
+# to the firmware defaults/previous Git-derived version behavior.
+VERSION_FILE           = $(FIRMWARE)/VERSION
+
 BUILDS_DIR            := $(ROOT)/builds
 
 OFFICIAL_VERSION      := v3.31.1
@@ -35,10 +43,23 @@ STOCK_WORKTREE        := $(ROOT)/.stock-firmware
 
 HOST_ARCH             := $(shell uname -m)
 
-# At an exact tag this becomes, for example, v3.31.1.
-# After custom commits it falls back to the Git short SHA.
-FW_VERSION := $(shell cd "$(FIRMWARE)" 2>/dev/null && \
+# Previous Git-derived firmware version behavior, retained as fallback.
+FW_GIT_VERSION = $(shell cd "$(FIRMWARE)" 2>/dev/null && \
 	(git describe --tags --exact-match 2>/dev/null || git rev-parse --short HEAD 2>/dev/null))
+
+# Optional values supplied by firmware/VERSION.
+VERSION_FW_NAME = $(shell if [ -f "$(VERSION_FILE)" ]; then \
+	sed -n 's/^FW_NAME=//p' "$(VERSION_FILE)" | head -1; \
+fi)
+VERSION_FW_VERSION = $(shell if [ -f "$(VERSION_FILE)" ]; then \
+	sed -n 's/^FW_VERSION=//p' "$(VERSION_FILE)" | head -1; \
+fi)
+
+# Use VERSION only when both FW_NAME and FW_VERSION are present.
+# Otherwise preserve the prior build behavior.
+USE_VERSION_FILE = $(if $(and $(strip $(VERSION_FW_NAME)),$(strip $(VERSION_FW_VERSION))),yes,no)
+
+FW_VERSION = $(if $(filter yes,$(USE_VERSION_FILE)),$(VERSION_FW_VERSION),$(FW_GIT_VERSION))
 
 # Human-readable source name used for surfaced build artifacts.
 # Prefer a branch name, then an exact tag, then a short commit SHA.
@@ -80,6 +101,11 @@ help:
 	@echo "Build host architecture: $(HOST_ARCH)"
 	@echo "Current firmware source: $(FW_SOURCE_NAME)"
 	@echo "Current firmware version: $(FW_VERSION)"
+	@if [ "$(USE_VERSION_FILE)" = "yes" ]; then \
+		echo "Firmware identity: $(VERSION_FW_NAME) $(VERSION_FW_VERSION)"; \
+	else \
+		echo "Firmware identity: firmware defaults"; \
+	fi
 	@echo "SDK directory: $(SDK)"
 
 
@@ -181,7 +207,13 @@ firmware-status:
 		echo "  ref:     $${current:0:7} (detached)"; \
 	fi; \
 	echo "  commit:  $$current"; \
+	echo "  git:     $(FW_GIT_VERSION)"; \
 	echo "  version: $(FW_VERSION)"; \
+	if [ "$(USE_VERSION_FILE)" = "yes" ]; then \
+		echo "  display: $(VERSION_FW_NAME) $(VERSION_FW_VERSION)"; \
+	else \
+		echo "  display: firmware defaults"; \
+	fi; \
 	echo; \
 	echo "Outer repository pin:"; \
 	echo "  commit:  $$pinned"; \
@@ -283,14 +315,30 @@ build: check-host sdk
 		exit 1; \
 	}
 	@echo "Building firmware source $(FW_SOURCE_NAME), version $(FW_VERSION)"
-	docker run --rm \
-		-v "$(ROOT):/repo" \
-		-v "$(SDK):$(CONTAINER_FIRMWARE)/$(SDK_DIRNAME)" \
-		-w $(TARGET) \
-		$(IMAGE) \
-		make \
-			DEBUG=-DNDEBUG \
-			'FW_VERSION=-DAPP_FW_VERSION=\"$(FW_VERSION)\"'
+	@if [ "$(USE_VERSION_FILE)" = "yes" ]; then \
+		echo "Firmware identity: $(VERSION_FW_NAME) $(VERSION_FW_VERSION)"; \
+	else \
+		echo "Firmware identity: firmware defaults + Git-derived version override"; \
+	fi
+	@if [ "$(USE_VERSION_FILE)" = "yes" ]; then \
+		docker run --rm \
+			-v "$(ROOT):/repo" \
+			-v "$(SDK):$(CONTAINER_FIRMWARE)/$(SDK_DIRNAME)" \
+			-w $(TARGET) \
+			$(IMAGE) \
+			make \
+				DEBUG=-DNDEBUG \
+				'FW_VERSION=-DAPP_FW_NAME=\"$(VERSION_FW_NAME) \" -DAPP_FW_VERSION=\"$(VERSION_FW_VERSION)\" -DAPP_FW_VARIANT=\"\"'; \
+	else \
+		docker run --rm \
+			-v "$(ROOT):/repo" \
+			-v "$(SDK):$(CONTAINER_FIRMWARE)/$(SDK_DIRNAME)" \
+			-w $(TARGET) \
+			$(IMAGE) \
+			make \
+				DEBUG=-DNDEBUG \
+				'FW_VERSION=-DAPP_FW_VERSION=\"$(FW_VERSION)\"'; \
+	fi
 
 
 verify: official
@@ -362,7 +410,13 @@ package: check-host sdk
 	@{ \
 		echo "source=$(FW_SOURCE_NAME)"; \
 		echo "commit=$$(git -C "$(FIRMWARE)" rev-parse HEAD)"; \
+		echo "git_version=$(FW_GIT_VERSION)"; \
 		echo "version=$(FW_VERSION)"; \
+		echo "version_file=$(USE_VERSION_FILE)"; \
+		if [ "$(USE_VERSION_FILE)" = "yes" ]; then \
+			echo "fw_name=$(VERSION_FW_NAME)"; \
+			echo "fw_version=$(VERSION_FW_VERSION)"; \
+		fi; \
 		echo "package_name=$(PACKAGE_NAME)"; \
 		echo "sdk=$(SDK_VERSION)"; \
 		echo "built_at=$$(date -u +%Y-%m-%dT%H:%M:%SZ)"; \
@@ -405,7 +459,13 @@ surface:
 	@{ \
 		echo "source=$(FW_SOURCE_NAME)"; \
 		echo "commit=$$(git -C "$(FIRMWARE)" rev-parse HEAD)"; \
+		echo "git_version=$(FW_GIT_VERSION)"; \
 		echo "version=$(FW_VERSION)"; \
+		echo "version_file=$(USE_VERSION_FILE)"; \
+		if [ "$(USE_VERSION_FILE)" = "yes" ]; then \
+			echo "fw_name=$(VERSION_FW_NAME)"; \
+			echo "fw_version=$(VERSION_FW_VERSION)"; \
+		fi; \
 		echo "package_name=$(PACKAGE_NAME)"; \
 		echo "sdk=$(SDK_VERSION)"; \
 		echo "built_at=$$(date -u +%Y-%m-%dT%H:%M:%SZ)"; \
