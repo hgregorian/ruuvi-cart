@@ -334,12 +334,21 @@ package: check-host sdk
 		cp "$(BUILD_DIR)/nrf52832_xxaa.out" "$(BUILD_OUTPUT_DIR)/"; \
 	fi
 
+	# package.sh emits two harmless warnings for custom, non-tagged builds:
+	#   - git describe --exact-match fails because the commit is not a tag
+	#   - it attempts to move a .map file that this build does not generate
+	# Filter only those exact messages while preserving all other stderr and
+	# the package.sh/docker exit status.
 	docker run --rm \
 		-v "$(ROOT):/repo" \
-		-v "$(SDK):/repo/firmware/$(SDK_DIRNAME)" \
-		-w /repo/firmware/src/targets/ruuvitag_b/armgcc \
+		-v "$(SDK):$(CONTAINER_FIRMWARE)/$(SDK_DIRNAME)" \
+		-w $(TARGET) \
 		$(IMAGE) \
-		./package.sh -n $(PACKAGE_NAME) -v $(FW_VERSION)
+		./package.sh -n $(PACKAGE_NAME) -v $(FW_VERSION) \
+		2> >(grep -v -E \
+			-e "^fatal: no tag exactly matches '" \
+			-e "^mv: cannot stat '_build/nrf52832_xxaa\\.map': No such file or directory$$" \
+			>&2)
 
 	@set -euo pipefail; \
 	shopt -s nullglob; \
