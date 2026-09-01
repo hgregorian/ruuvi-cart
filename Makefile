@@ -319,14 +319,51 @@ package: check-host sdk
 		echo "ERROR: Unable to determine firmware Git version."; \
 		exit 1; \
 	}
+	@test -n "$(FW_SOURCE_NAME)" || { \
+		echo "ERROR: Unable to determine firmware source name."; \
+		exit 1; \
+	}
+
+	@echo "Preparing surfaced build directory..."
+	@rm -rf "$(BUILD_OUTPUT_DIR)"
+	@mkdir -p "$(BUILD_OUTPUT_DIR)"
+
+	@cp "$(BUILD_DIR)/nrf52832_xxaa.bin" "$(BUILD_OUTPUT_DIR)/"
+	@cp "$(BUILD_DIR)/nrf52832_xxaa.hex" "$(BUILD_OUTPUT_DIR)/"
+	@if [ -f "$(BUILD_DIR)/nrf52832_xxaa.out" ]; then \
+		cp "$(BUILD_DIR)/nrf52832_xxaa.out" "$(BUILD_OUTPUT_DIR)/"; \
+	fi
+
 	docker run --rm \
 		-v "$(ROOT):/repo" \
-		-v "$(SDK):$(CONTAINER_FIRMWARE)/$(SDK_DIRNAME)" \
-		-w $(TARGET) \
+		-v "$(SDK):/repo/firmware/$(SDK_DIRNAME)" \
+		-w /repo/firmware/src/targets/ruuvitag_b/armgcc \
 		$(IMAGE) \
 		./package.sh -n $(PACKAGE_NAME) -v $(FW_VERSION)
+
+	@set -euo pipefail; \
+	shopt -s nullglob; \
+	packages=("$(PACKAGE_DIR)"/*"$(PACKAGE_NAME)"*.zip); \
+	if [ $${#packages[@]} -eq 0 ]; then \
+		echo "ERROR: No DFU packages were generated."; \
+		exit 1; \
+	fi; \
+	cp "$${packages[@]}" "$(BUILD_OUTPUT_DIR)/"
+
+	@{ \
+		echo "source=$(FW_SOURCE_NAME)"; \
+		echo "commit=$$(git -C "$(FIRMWARE)" rev-parse HEAD)"; \
+		echo "version=$(FW_VERSION)"; \
+		echo "package_name=$(PACKAGE_NAME)"; \
+		echo "sdk=$(SDK_VERSION)"; \
+		echo "built_at=$$(date -u +%Y-%m-%dT%H:%M:%SZ)"; \
+	} > "$(BUILD_OUTPUT_DIR)/BUILD_INFO"
+
 	@echo
-	@$(MAKE) --no-print-directory surface
+	@echo "Artifacts:"
+	@ls -lh "$(BUILD_OUTPUT_DIR)"
+	@echo
+	@echo "Surfaced at: $(BUILD_OUTPUT_DIR)"
 
 
 # Copy the useful outputs into builds/<firmware-source>/ so ready-to-flash
