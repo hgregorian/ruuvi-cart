@@ -59,6 +59,13 @@ fi)
 # Otherwise preserve the prior build behavior.
 USE_VERSION_FILE = $(if $(and $(strip $(VERSION_FW_NAME)),$(strip $(VERSION_FW_VERSION))),yes,no)
 
+# APP_FW_NAME is passed through the firmware target's FW_VERSION variable and
+# later expanded unquoted into compiler CFLAGS. Escape spaces so a name such as
+# "DumpSense FW" remains one -D argument all the way to arm-none-eabi-gcc.
+empty :=
+space := $(empty) $(empty)
+VERSION_FW_NAME_C = $(subst $(space),\ ,$(VERSION_FW_NAME))
+
 FW_VERSION = $(if $(filter yes,$(USE_VERSION_FILE)),$(VERSION_FW_VERSION),$(FW_GIT_VERSION))
 
 # Human-readable source name used for surfaced build artifacts.
@@ -328,7 +335,7 @@ build: check-host sdk
 			$(IMAGE) \
 			make \
 				DEBUG=-DNDEBUG \
-				'FW_VERSION=-DAPP_FW_NAME=\"$(VERSION_FW_NAME) \" -DAPP_FW_VERSION=\"$(VERSION_FW_VERSION)\" -DAPP_FW_VARIANT=\"\"'; \
+				'FW_VERSION=-DAPP_FW_NAME=\"$(VERSION_FW_NAME_C)\ \" -DAPP_FW_VERSION=\"$(VERSION_FW_VERSION)\" -DAPP_FW_VARIANT=\"\"'; \
 	else \
 		docker run --rm \
 			-v "$(ROOT):/repo" \
