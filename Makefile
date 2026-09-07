@@ -70,6 +70,11 @@ empty :=
 space := $(empty) $(empty)
 VERSION_FW_NAME_C = $(subst $(space),\ ,$(VERSION_FW_NAME))
 
+# Firmware variant for VERSION-managed builds. Production keeps the existing
+# neutral single-space variant; lab builds override this with +lab.
+BUILD_FW_VARIANT ?= $(space)
+BUILD_FW_VARIANT_C = $(subst $(space),\ ,$(BUILD_FW_VARIANT))
+
 FW_VERSION = $(if $(filter yes,$(USE_VERSION_FILE)),$(VERSION_FW_VERSION),$(FW_GIT_VERSION))
 
 # Optional extra preprocessor definitions passed through the firmware target's
@@ -354,7 +359,7 @@ build: check-host sdk
 			$(IMAGE) \
 			make \
 				DEBUG=-DNDEBUG \
-				'FW_VERSION=-DAPP_FW_NAME=\"$(VERSION_FW_NAME_C)\ \" -DAPP_FW_VERSION=\"$(VERSION_FW_VERSION)\" -DAPP_FW_VARIANT=\"\ \" $(BUILD_DEFINES)'; \
+				'FW_VERSION=-DAPP_FW_NAME=\"$(VERSION_FW_NAME_C)\ \" -DAPP_FW_VERSION=\"$(VERSION_FW_VERSION)\" -DAPP_FW_VARIANT=\"$(BUILD_FW_VARIANT_C)\" $(BUILD_DEFINES)'; \
 	else \
 		docker run --rm \
 			-v "$(ROOT):/repo" \
@@ -370,6 +375,7 @@ build: check-host sdk
 build-lab:
 	@$(MAKE) --no-print-directory \
 		BUILD_DEFINES=-DAPP_POSTMORTEM_DIAGNOSTICS_ENABLED=1 \
+		BUILD_FW_VARIANT=+lab \
 		build
 
 
