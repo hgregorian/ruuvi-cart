@@ -72,6 +72,10 @@ VERSION_FW_NAME_C = $(subst $(space),\ ,$(VERSION_FW_NAME))
 
 FW_VERSION = $(if $(filter yes,$(USE_VERSION_FILE)),$(VERSION_FW_VERSION),$(FW_GIT_VERSION))
 
+# Optional extra preprocessor definitions passed through the firmware target's
+# FW_VERSION variable. Production builds leave this empty.
+BUILD_DEFINES ?=
+
 # Human-readable source name used for surfaced build artifacts.
 # Prefer a branch name, then an exact tag, then a short commit SHA.
 FW_SOURCE_NAME := $(shell cd "$(FIRMWARE)" 2>/dev/null && \
@@ -83,7 +87,7 @@ BUILD_OUTPUT_DIR := $(BUILDS_DIR)/$(FW_SOURCE_NAME)
 
 .PHONY: help check-host update sdk official image tools \
 	firmware-use firmware-reset firmware-status firmware-list \
-	clean build verify package surface stock all
+	clean build build-lab verify package surface stock all
 
 
 help:
@@ -102,7 +106,8 @@ help:
 	@echo
 	@echo "Build:"
 	@echo "  make clean                  Remove firmware build output"
-	@echo "  make build                  Build the currently selected firmware"
+	@echo "  make build                  Build production firmware (diagnostics disabled)"
+	@echo "  make build-lab              Build lab firmware with post-mortem diagnostics enabled"
 	@echo "  make verify                 Compare current build with official $(OFFICIAL_VERSION)"
 	@echo "  make package                Build DFU packages and surface artifacts under builds/"
 	@echo "  make surface                Re-surface existing build/package artifacts"
@@ -349,7 +354,7 @@ build: check-host sdk
 			$(IMAGE) \
 			make \
 				DEBUG=-DNDEBUG \
-				'FW_VERSION=-DAPP_FW_NAME=\"$(VERSION_FW_NAME_C)\ \" -DAPP_FW_VERSION=\"$(VERSION_FW_VERSION)\" -DAPP_FW_VARIANT=\"\ \"'; \
+				'FW_VERSION=-DAPP_FW_NAME=\"$(VERSION_FW_NAME_C)\ \" -DAPP_FW_VERSION=\"$(VERSION_FW_VERSION)\" -DAPP_FW_VARIANT=\"\ \" $(BUILD_DEFINES)'; \
 	else \
 		docker run --rm \
 			-v "$(ROOT):/repo" \
@@ -358,8 +363,14 @@ build: check-host sdk
 			$(IMAGE) \
 			make \
 				DEBUG=-DNDEBUG \
-				'FW_VERSION=-DAPP_FW_VERSION=\"$(FW_VERSION)\"'; \
+				'FW_VERSION=-DAPP_FW_VERSION=\"$(FW_VERSION)\" $(BUILD_DEFINES)'; \
 	fi
+
+
+build-lab:
+	@$(MAKE) --no-print-directory \
+		BUILD_DEFINES=-DAPP_POSTMORTEM_DIAGNOSTICS_ENABLED=1 \
+		build
 
 
 verify: official
