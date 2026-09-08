@@ -59,20 +59,17 @@ fi)
 # Otherwise preserve the prior build behavior.
 USE_VERSION_FILE = $(if $(and $(strip $(VERSION_FW_NAME)),$(strip $(VERSION_FW_VERSION))),yes,no)
 
-# APP_FW_NAME is passed through the firmware target's FW_VERSION variable and
-# later expanded unquoted into compiler CFLAGS. Escape spaces so names containing
-# spaces remain one -D argument all the way to arm-none-eabi-gcc.
-#
-# APP_FW_VARIANT cannot be an empty string because upstream passes it directly
-# as a printf format and builds with -Werror=format-zero-length. For VERSION-
-# managed builds, use a single trailing space as a neutral, non-visible variant.
+# APP_FW_NAME and APP_FW_VARIANT are passed through the firmware target's
+# FW_VERSION variable and later expanded unquoted into compiler CFLAGS.
+# Escape spaces so values containing spaces remain one -D argument all the
+# way to arm-none-eabi-gcc.
 empty :=
 space := $(empty) $(empty)
 VERSION_FW_NAME_C = $(subst $(space),\ ,$(VERSION_FW_NAME))
 
-# Firmware variant for VERSION-managed builds. Production keeps the existing
-# neutral single-space variant; lab builds override this with +lab.
-BUILD_FW_VARIANT ?= $(space)
+# Firmware variant for VERSION-managed builds.
+# Production defaults to an empty variant; lab builds override this with +lab.
+BUILD_FW_VARIANT ?=
 BUILD_FW_VARIANT_C = $(subst $(space),\ ,$(BUILD_FW_VARIANT))
 
 FW_VERSION = $(if $(filter yes,$(USE_VERSION_FILE)),$(VERSION_FW_VERSION),$(FW_GIT_VERSION))
